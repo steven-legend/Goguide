@@ -1,0 +1,1289 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GoGuide Multi-Mode Assistant</title>
+    <!-- --- FIX: Corrected CDN links --- -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/html5-qrcode"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary-color: #3b82f6; /* Blue 500 */
+            --secondary-color: #4f46e5; /* Indigo 600 */
+            --accent-color: #10b981; /* Emerald 500 */
+        }
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #0d121c; /* Very Dark Blue-Gray */
+        }
+        .app-container {
+            border: 1px solid #1f2937; /* gray-800 */
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5), 0 10px 10px -5px rgba(0, 0, 0, 0.3);
+            background-color: #1f2937; /* gray-800 */
+        }
+        .toggle-switch {
+            position: relative;
+            display: inline-block;
+            width: 60px;
+            height: 34px;
+        }
+        .toggle-switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+        .slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: #4b5563; /* gray-600 */
+            transition: .4s;
+            border-radius: 34px;
+        }
+        .slider:before {
+            position: absolute;
+            content: "";
+            height: 26px;
+            width: 26px;
+            left: 4px;
+            bottom: 4px;
+            background-color: #d1d5db; /* Light Gray */
+            transition: .4s;
+            border-radius: 50%;
+        }
+        input:checked + .slider {
+            background-color: var(--primary-color);
+        }
+        input:checked + .slider:before {
+            transform: translateX(26px);
+        }
+        .status-pulse {
+            animation: pulse-ring 1.2s cubic-bezier(0.215, 0.61, 0.355, 1) infinite;
+        }
+        @keyframes pulse-ring {
+            0% {
+                box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.4);
+            }
+            70% {
+                box-shadow: 0 0 0 10px rgba(59, 130, 246, 0);
+            }
+            100% {
+                box-shadow: 0 0 0 0 rgba(59, 130, 246, 0);
+            }
+        }
+        .tab-active {
+            border-bottom-color: var(--primary-color) !important;
+            color: var(--primary-color) !important;
+            font-weight: 700;
+        }
+        #qr-reader-container, #visual-camera-container {
+            width: 100%;
+            border-radius: 0.5rem;
+            overflow: hidden;
+            background-color: #000;
+            position: relative;
+        }
+        #visual-camera {
+            width: 100%;
+            height: 200px;
+            object-fit: cover;
+            transform: scaleX(-1);
+            border-radius: 0.5rem;
+        }
+        .camera-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            pointer-events: none;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: 600;
+            background: rgba(0, 0, 0, 0.4);
+        }
+        .qr-placeholder {
+            min-height: 200px;
+        }
+        @keyframes guide-pulse {
+            0% {
+                transform: scale(1);
+                opacity: 1;
+                box-shadow: 0 0 0 0 var(--guide-color-rgba);
+            }
+            50% {
+                transform: scale(1.05);
+                opacity: 1;
+                box-shadow: 0 0 0 8px rgba(59, 130, 246, 0);
+            }
+            100% {
+                transform: scale(1);
+                opacity: 1;
+                box-shadow: 0 0 0 0 var(--guide-color-rgba);
+            }
+        }
+        .guide-voice-pulse {
+            --guide-color-rgba: rgba(59, 130, 246, 0.6);
+            border: 2px solid #3b82f6;
+            background-color: #1e3a8a; /* blue-900 */
+        }
+        .guide-visual-pulse {
+            --guide-color-rgba: rgba(79, 70, 229, 0.6);
+            border: 2px solid #4f46e5;
+            background-color: #3730a3; /* indigo-900 */
+            animation: guide-pulse 4s infinite 2s ease-in-out;
+        }
+    </style>
+</head>
+<body class="p-4 min-h-screen flex items-center justify-center text-gray-100">
+
+<div class="w-full max-w-xl p-6 md:p-8 rounded-xl app-container">
+
+    <!-- Header & Logo -->
+    <div class="flex items-center justify-between mb-4 border-b border-gray-700 pb-4">
+        <div class="flex items-center space-x-3">
+            <img src="https"
+                 alt="GoGuide Logo"
+                 onerror="this.src='https://placehold.co/40x40/3b82f6/white?text=GG'"
+                 class="w-10 h-10 rounded-full object-cover shadow-md">
+            <h1 class="text-2xl font-extrabold text-white">GoGuide</h1>
+        </div>
+        <!-- Language Selector -->
+        <div class="flex flex-col items-end space-y-1">
+            <label for="language-select" class="text-xs font-medium text-gray-400">Language</label>
+            <select id="language-select" class="p-2 border border-gray-600 rounded-lg text-sm transition duration-150 bg-gray-700 text-white focus:ring-blue-500 focus:border-blue-500">
+                <option value="en-US">English (US)</option>
+                <option value="es-ES">Spanish (Spain)</option>
+                <option value="fr-FR">French (France)</option>
+                <option value="de-DE">German (Germany)</option>
+                <option value="it-IT">Italian (Italy)</option>
+            </select>
+        </div>
+    </div>
+
+    <!-- Global Info (Location/Weather) -->
+    <div id="global-info" class="flex justify-between items-center mb-6 p-4 bg-gray-700 rounded-xl text-sm text-gray-200 font-semibold border-l-4 border-blue-500 shadow-inner">
+        <div class="flex items-center space-x-2">
+            <!-- Location Icon -->
+            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-blue-400"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>
+            <span id="current-location">Getting location...</span>
+        </div>
+        <div class="flex items-center space-x-2">
+            <!-- Temperature Icon -->
+            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-blue-400"><path d="M14 4v10.54a4 4 0 1 1-4 0V4"/><line x1="8" x2="16" y1="2" y2="2"/></svg>
+            <span id="current-temperature">-- °C</span>
+        </div>
+    </div>
+
+    <!-- Mode Selector Tabs -->
+    <div class="flex border-b border-gray-700 mb-6">
+        <button id="tab-voice" data-mode="voice" class="flex-1 py-3 text-center text-sm font-semibold border-b-2 tab-active transition duration-150">Voice/Visual AI</button>
+        <button id="tab-qr" data-mode="qr" class="flex-1 py-3 text-center text-sm font-semibold border-b-2 border-transparent text-gray-400 hover:text-blue-400 hover:border-blue-400 transition duration-150">QR Scanner</button>
+    </div>
+
+    <!-- --- VOICE / VISUAL ASSISTANT MODE --- -->
+    <div id="mode-voice" class="mode-content">
+        
+        <!-- VISUAL AI CAMERA PREVIEW -->
+        <div id="visual-camera-container" class="mb-4 hidden">
+            <video id="visual-camera" autoplay playsinline class="w-full h-48 rounded-lg object-cover"></video>
+            <canvas id="camera-canvas" class="hidden"></canvas>
+            <div class="camera-overlay rounded-lg" id="camera-overlay">Visual AI Enabled</div>
+        </div>
+
+        <!-- Controls Area -->
+        <div class="flex flex-col space-y-4 mb-6 p-4 bg-gray-700 rounded-xl border border-gray-600 shadow-sm">
+            <div class="flex items-center justify-between">
+                <div class="flex items-center space-x-3">
+                    <div id="status-indicator" class="w-3 h-3 rounded-full bg-gray-400"></div>
+                    <p id="status-text" class="text-sm font-semibold text-gray-300">Assistant Idle</p>
+                </div>
+                <!-- Power Toggle & Visual AI Toggle -->
+                <div class="flex items-center space-x-6">
+                    <!-- Visual AI Toggle -->
+                    <div class="flex flex-col items-center space-y-1">
+                        <label for="visual-ai-toggle" class="text-xs font-medium text-gray-300">Visual AI</label>
+                        <label class="toggle-switch w-10 h-6">
+                            <input type="checkbox" id="visual-ai-toggle">
+                            <span class="slider !w-10 !h-6 !rounded-full before:!h-4 before:!w-4 before:!left-1 before:!bottom-1 checked:before:!translate-x-4"></span>
+                        </label>
+                    </div>
+                    
+                    <!-- Background Music Toggle (UPDATED) -->
+                    <div class="flex flex-col items-center space-y-1">
+                        <label for="background-music-toggle" class="text-xs font-medium text-gray-300">BGM</label>
+                        <label class="toggle-switch w-10 h-6">
+                            <input type="checkbox" id="background-music-toggle">
+                            <span class="slider !w-10 !h-6 !rounded-full before:!h-4 before:!w-4 before:!left-1 before:!bottom-1 checked:before:!translate-x-4"></span>
+                        </label>
+                    </div>
+                    
+                    <!-- Voice Power Toggle -->
+                    <div class="flex flex-col items-center space-y-1">
+                        <span class="text-xs font-medium text-gray-300">Voice</span>
+                        <label class="toggle-switch w-10 h-6">
+                            <input type="checkbox" id="power-toggle">
+                            <span class="slider !w-10 !h-6 !rounded-full before:!h-4 before:!w-4 before:!left-1 before:!bottom-1 checked:before:!translate-x-4"></span>
+                        </label>
+                    </div>
+                </div>
+            </div>
+            <!-- Removed Test BGM Button -->
+        </div>
+
+        <!-- Conversation Transcript -->
+        <div id="transcript-container" class="h-64 overflow-y-auto p-4 bg-gray-900 rounded-xl border border-gray-700 space-y-4 mb-6 shadow-inner">
+            <!-- Animated Guide for Voice/Visual AI Toggles -->
+            <div class="text-center py-4 space-y-4" id="initial-message">
+                <p class="text-gray-400 font-medium">Get started by enabling a feature:</p>
+                <div class="guide-container">
+                    <div class="guide-voice-pulse transition duration-300 rounded-xl shadow-md">
+                        <span class="text-blue-300 font-bold text-sm flex items-center gap-1 p-2">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="4"/><line x1="9" x2="9" y1="15" y2="9"/><line x1="15" x2="15" y1="15" y2="9"/></svg>
+                            Enable Voice
+                        </span>
+                    </div>
+                    <div class="guide-visual-pulse transition duration-300 rounded-xl shadow-md">
+                        <span class="text-indigo-300 font-bold text-sm flex items-center gap-1 p-2">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 8.5L16 2L10 8.5"/><path d="M22 15.5L16 22L10 15.5"/><path d="M16 2v20"/><path d="M10 2v20"/></svg>
+                            Enable Visual AI
+                        </span>
+                    </div>
+                </div>
+                <p class="text-xs text-gray-500 pt-2">Tap a toggle above to begin interaction.</p>
+            </div>
+        </div>
+
+        <!-- Manual Input (Fallback/Debug) -->
+        <div class="flex space-x-2">
+            <input type="text" id="manual-input" placeholder="Type your query here..." class="flex-grow p-3 border border-gray-600 rounded-xl focus:ring-blue-500 focus:border-blue-500 transition duration-150 bg-gray-700 text-white placeholder-gray-400" disabled>
+            <button id="manual-send-btn" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-xl shadow-lg transition duration-150 disabled:opacity-50 disabled:shadow-none">
+                Send
+            </button>
+        </div>
+    </div>
+
+    <!-- --- QR SCANNER MODE --- -->
+    <div id="mode-qr" class="mode-content hidden">
+        <div id="qr-reader-container" class="mb-4">
+            <div id="qr-reader" class="w-full qr-placeholder border-2 border-dashed border-gray-600 rounded-xl flex items-center justify-center bg-gray-900">
+                <p class="text-gray-500 text-center p-4">Camera starting...</p>
+            </div>
+        </div>
+        <div id="qr-result-box" class="p-4 bg-green-900 border border-green-700 text-green-200 rounded-xl hidden transition duration-300 shadow-md">
+            <span class="font-bold">Scan Result: </span><span id="qr-result-text" class="break-words font-mono"></span>
+        </div>
+        <button id="qr-toggle-btn" class="mt-4 w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 rounded-xl shadow-lg transition duration-150">
+            Stop Scanner
+        </button>
+    </div>
+</div>
+
+<!-- Text Breakdown Modal -->
+<div id="breakdown-modal" class="fixed inset-0 bg-gray-900 bg-opacity-75 z-50 hidden flex items-center justify-center p-4 transition-opacity duration-300">
+    <div class="bg-gray-800 p-6 rounded-xl shadow-2xl max-w-sm w-full">
+        <h2 class="text-xl font-bold mb-4 text-white">Scan Result: Text Found</h2>
+        <p id="modal-scanned-text" class="mb-4 p-3 bg-gray-700 rounded-lg border border-gray-600 text-sm font-mono max-h-40 overflow-y-auto break-words text-gray-100"></p>
+        
+        <p class="font-semibold text-sm mb-2 text-gray-300">Translate/Summarize in:</p>
+        <div class="flex flex-wrap gap-2 mb-4">
+            <button class="breakdown-lang-btn bg-blue-800 text-blue-100 hover:bg-blue-700 px-3 py-1 text-sm font-medium rounded-full transition duration-150" data-lang-code="fr">French</button>
+            <button class="breakdown-lang-btn bg-blue-800 text-blue-100 hover:bg-blue-700 px-3 py-1 text-sm font-medium rounded-full transition duration-150" data-lang-code="de">German</button>
+            <button class="breakdown-lang-btn bg-blue-800 text-blue-100 hover:bg-blue-700 px-3 py-1 text-sm font-medium rounded-full transition duration-150" data-lang-code="es">Spanish</button>
+            <button class="breakdown-lang-btn bg-blue-800 text-blue-100 hover:bg-blue-700 px-3 py-1 text-sm font-medium rounded-full transition duration-150" data-lang-code="summary">Summary</button>
+        </div>
+        <div id="modal-result" class="p-3 bg-green-900 rounded-lg text-sm text-green-200 border border-green-700 hidden mt-4"></div>
+        <div id="modal-loading" class="text-center text-blue-400 hidden mt-4">Processing...</div>
+        <button id="modal-close-btn" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 mt-4 rounded-lg transition duration-150">
+            Close & Finish
+        </button>
+    </div>
+</div>
+
+<script>
+    // --- Configuration and API Setup ---
+    const API_KEY = "";
+    const API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${API_KEY}`;
+    const TTS_API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-tts:generateContent?key=${API_KEY}`;
+    const IMAGE_SIZE = 512; // Standard size for visual input
+    
+    // --- CUSTOM: Background Music and Notification Sound URLs ---
+    const BACKGROUND_MUSIC_URL = 'https://files.catbox.moe/4oc9ph.mp3'; 
+    const NOTIFICATION_SOUND_URL = 'https://files.catbox.moe/97s462.mp3'; // Short chime sound
+
+    // --- Inactivity Timer Constants ---
+    const INACTIVITY_DELAY_MS = 10000; // 10 seconds (10,000 milliseconds)
+    const INACTIVITY_PROMPT_TEXT = "Mbaza! Ready for your next question? Prêt(e) pour la suite?"; // Shorter, more concise prompt
+
+    // --- Global State ---
+    const state = {
+        isEnabled: false,
+        isVisualAiEnabled: false,
+        isListening: false,
+        isSpeaking: false,
+        isMusicPlaying: false,
+        isMusicEnabled: false,
+        currentLang: 'en-US',
+        TTS_SPEED: 1.0, 
+        currentMode: 'voice',
+        location: { city: 'Unknown Location', lat: null, lon: null, weather: '-- °C' },
+        qrScanner: null,
+        isQrScanning: false,
+        cameraStream: null,
+        audioPlayer: new Audio(), // For TTS
+        backgroundMusicPlayer: new Audio(BACKGROUND_MUSIC_URL),
+        notificationPlayer: new Audio(NOTIFICATION_SOUND_URL) // For query received sound
+    };
+
+    // --- Global Timer ID ---
+    let inactivityTimerId = null;
+
+    // --- DOM Elements ---
+    const elements = {
+        powerToggle: document.getElementById('power-toggle'),
+        visualAiToggle: document.getElementById('visual-ai-toggle'),
+        backgroundMusicToggle: document.getElementById('background-music-toggle'),
+        languageSelect: document.getElementById('language-select'),
+        statusIndicator: document.getElementById('status-indicator'),
+        statusText: document.getElementById('status-text'),
+        transcriptContainer: document.getElementById('transcript-container'),
+        manualInput: document.getElementById('manual-input'),
+        manualSendBtn: document.getElementById('manual-send-btn'),
+        initialMessage: document.getElementById('initial-message'),
+        currentLocation: document.getElementById('current-location'),
+        currentTemperature: document.getElementById('current-temperature'),
+        tabVoice: document.getElementById('tab-voice'),
+        tabQr: document.getElementById('tab-qr'),
+        modeVoice: document.getElementById('mode-voice'),
+        modeQr: document.getElementById('mode-qr'),
+        qrReaderDiv: document.getElementById('qr-reader'),
+        qrResultBox: document.getElementById('qr-result-box'),
+        qrResultText: document.getElementById('qr-result-text'),
+        qrToggleBtn: document.getElementById('qr-toggle-btn'),
+        visualCameraContainer: document.getElementById('visual-camera-container'),
+        visualCameraVideo: document.getElementById('visual-camera'),
+        cameraCanvas: document.getElementById('camera-canvas'),
+        cameraOverlay: document.getElementById('camera-overlay'),
+        breakdownModal: document.getElementById('breakdown-modal'),
+        modalScannedText: document.getElementById('modal-scanned-text'),
+        modalResult: document.getElementById('modal-result'),
+        modalLoading: document.getElementById('modal-loading'),
+        modalCloseBtn: document.getElementById('modal-close-btn'),
+    };
+    let recognition = null; 
+
+    // --- Kinyarwanda Greeting Logic (Updated to single word) ---
+    function getKinyarwandaGreeting() {
+        return "Muraho! "; // Single, friendly Kinyarwanda word.
+    }
+    
+    // --- Pronunciation Fix: Text Cleaning for TTS ---
+    function cleanTextForTTS(text) {
+        // Enforce phonetic structure for clear reading: "ANDA GO GUIDE A I"
+        return text.replace(/ANDA GOGUIDE Ai/gi, "ANDA GO GUIDE A I");
+    }
+
+    // --- PCM to WAV Utility Functions (REQUIRED for TTS API) ---
+    function base64ToArrayBuffer(base64) {
+        const binaryString = atob(base64);
+        const len = binaryString.length;
+        const bytes = new Uint8Array(len);
+        for (let i = 0; i < len; i++) {
+            bytes[i] = binaryString.charCodeAt(i);
+        }
+        return bytes.buffer;
+    }
+
+    function pcmToWav(pcm16, sampleRate = 16000) {
+        const numChannels = 1;
+        const bytesPerSample = 2; // 16-bit PCM
+        const blockAlign = numChannels * bytesPerSample;
+        const byteRate = sampleRate * blockAlign;
+        const dataLength = pcm16.length * bytesPerSample;
+        const buffer = new ArrayBuffer(44 + dataLength);
+        const view = new DataView(buffer);
+        
+        // Write WAV header
+        writeString(view, 0, 'RIFF');
+        view.setUint32(4, 36 + dataLength, true);
+        writeString(view, 8, 'WAVE');
+        writeString(view, 12, 'fmt ');
+        view.setUint32(16, 16, true);
+        view.setUint16(20, 1, true);
+        view.setUint16(22, numChannels, true);
+        view.setUint32(24, sampleRate, true);
+        view.setUint32(28, byteRate, true);
+        view.setUint16(32, blockAlign, true);
+        view.setUint16(34, 16, true);
+        writeString(view, 36, 'data');
+        view.setUint32(40, dataLength, true);
+        
+        // Write PCM data
+        let offset = 44;
+        for (let i = 0; i < pcm16.length; i++) {
+            view.setInt16(offset, pcm16[i], true);
+            offset += bytesPerSample;
+        }
+        
+        return new Blob([view], { type: 'audio/wav' });
+    }
+
+    function writeString(view, offset, string) {
+        for (let i = 0; i < string.length; i++) {
+            view.setUint8(offset + i, string.charCodeAt(i));
+        }
+    }
+    // END PCM to WAV Helpers
+    
+    // --- CUSTOM: Background Music Controls (UPDATED LOGIC) ---
+    function adjustMusicVolumeAndPlayback(statusText) {
+        const player = state.backgroundMusicPlayer;
+
+        if (!state.isMusicEnabled) {
+            stopBackgroundMusic();
+            return;
+        }
+
+        // Ensure it's playing/looping if enabled (regardless of mode)
+        if (!state.isMusicPlaying) {
+             player.loop = true;
+             
+             console.log('Attempting to START background music...');
+             
+             player.play().then(() => {
+                 state.isMusicPlaying = true;
+                 console.log('Background music successfully started.');
+             }).catch(e => {
+                 console.warn("Background music failed to play (user interaction required/error):", e.message);
+                 // If play fails, the state remains false. 
+                 state.isMusicPlaying = false;
+             });
+        }
+        
+        // Determine target volume
+        let targetVolume = 0.4; // Normal/Idle Volume
+
+        // Adjust volume based on current status
+        switch (statusText) {
+            case 'Listening...':
+            case 'Thinking...':
+            case 'Speaking...': 
+                targetVolume = 0.1; 
+                break;
+            case 'Ready':
+            case 'Assistant Idle':
+            default:
+                targetVolume = 0.4;
+                break;
+        }
+
+        // Apply volume
+        player.volume = targetVolume;
+    }
+
+    function stopBackgroundMusic() {
+        if (state.isMusicPlaying) {
+            state.backgroundMusicPlayer.pause();
+            state.backgroundMusicPlayer.currentTime = 0;
+            state.isMusicPlaying = false;
+            console.log('Background music stopped.');
+        }
+    }
+    
+    // --- Inactivity Timer Functions (NEW) ---
+    function handleInactivityPrompt() {
+        // Log to confirm the timer is firing, aiding in user debugging
+        console.log("Inactivity timer fired. Checking status.");
+
+        // Check if the app is enabled, in voice mode, and not busy
+        if (state.isEnabled && state.currentMode === 'voice' && !state.isListening && !state.isSpeaking) {
+            console.log("Timer condition met. Speaking prompt.");
+            
+            // Append the prompt to the conversation
+            appendMessage('goguide', INACTIVITY_PROMPT_TEXT);
+            
+            // Speak the prompt. speakResponse will handle volume reduction and status update.
+            speakResponse(INACTIVITY_PROMPT_TEXT, true); // Pass true to skip the Kinyarwanda greeting on this prompt
+        }
+        // Always reset the timer at the end of the handler to keep the loop going
+        // This creates a continuous loop while state.isEnabled is true.
+        resetInactivityTimer();
+    }
+
+    function resetInactivityTimer() {
+        if (inactivityTimerId) {
+            clearTimeout(inactivityTimerId);
+        }
+        // Only set the timer if the assistant is ENABLED and in VOICE mode
+        if (state.isEnabled && state.currentMode === 'voice') {
+            inactivityTimerId = setTimeout(handleInactivityPrompt, INACTIVITY_DELAY_MS);
+            console.log("Inactivity Timer set/reset.");
+        } else {
+            console.log("Inactivity Timer cleared (assistant disabled or mode changed).");
+        }
+    }
+
+    // --- Utility Functions ---
+    function appendMessage(sender, text) {
+        if (elements.initialMessage) {
+            elements.initialMessage.remove();
+            elements.initialMessage = null;
+        }
+        const messageDiv = document.createElement('div');
+        messageDiv.className = `flex ${sender === 'user' ? 'justify-end' : 'justify-start'}`;
+        const bubble = document.createElement('div');
+        bubble.className = `max-w-xs md:max-w-md p-3 rounded-xl shadow-md ${
+            sender === 'user'
+            ? 'bg-blue-600 text-white rounded-br-none'
+            : 'bg-gray-600 text-gray-100 rounded-tl-none'
+        }`;
+        bubble.innerHTML = `<span class="font-bold">${sender === 'user' ? 'You' : 'GoGuide'}:</span> ${text}`;
+        messageDiv.appendChild(bubble);
+        elements.transcriptContainer.appendChild(messageDiv);
+        elements.transcriptContainer.scrollTop = elements.transcriptContainer.scrollHeight;
+    }
+
+    function updateStatus(status) {
+        elements.statusText.textContent = status.text;
+        elements.statusIndicator.className = 'w-3 h-3 rounded-full ' + status.class;
+        if (status.text === 'Listening...') {
+            elements.statusIndicator.classList.add('status-pulse');
+        } else {
+            elements.statusIndicator.classList.remove('status-pulse');
+        }
+        
+        // Adjust background music based on status, regardless of current mode
+        adjustMusicVolumeAndPlayback(status.text);
+
+        const inputDisabled = state.isListening || state.isSpeaking || !state.isEnabled;
+        elements.manualInput.disabled = inputDisabled;
+        elements.manualSendBtn.disabled = inputDisabled;
+    }
+
+    // --- Camera Stream Functions (Visual AI & QR) ---
+    async function startVisualCamera() {
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+            console.error('MediaDevices API not supported');
+            elements.visualAiToggle.checked = false;
+            handleVisualAiToggle();
+            return;
+        }
+        try {
+            state.cameraStream = await navigator.mediaDevices.getUserMedia({ video: true });
+            elements.visualCameraVideo.srcObject = state.cameraStream;
+            elements.visualCameraContainer.classList.remove('hidden');
+            elements.cameraOverlay.textContent = 'Visual AI Enabled. Ask me about this scene.';
+            state.isVisualAiEnabled = true;
+        } catch (err) {
+            console.error('Camera access denied or failed:', err);
+            elements.cameraOverlay.textContent = 'Camera Access Denied. Check permissions.';
+            elements.visualAiToggle.checked = false;
+            state.isVisualAiEnabled = false;
+            const errorToast = document.createElement('div');
+            errorToast.className = 'p-2 bg-red-800 text-red-100 rounded-lg text-sm mb-2';
+            errorToast.textContent = 'ERROR: Cannot start camera. Check permissions.';
+            elements.modeVoice.prepend(errorToast);
+            setTimeout(() => errorToast.remove(), 5000);
+        }
+    }
+
+    function stopVisualCamera() {
+        if (state.cameraStream) {
+            state.cameraStream.getTracks().forEach(track => track.stop());
+            state.cameraStream = null;
+        }
+        elements.visualCameraContainer.classList.add('hidden');
+        elements.visualCameraVideo.srcObject = null;
+        state.isVisualAiEnabled = false;
+    }
+
+    function captureFrameToB64() {
+        if (!state.cameraStream || !state.isVisualAiEnabled) return null;
+        const video = elements.visualCameraVideo;
+        const canvas = elements.cameraCanvas;
+        const ratio = video.videoWidth / video.videoHeight;
+        canvas.width = IMAGE_SIZE;
+        canvas.height = IMAGE_SIZE / ratio;
+        const ctx = canvas.getContext('2d');
+        ctx.save();
+        ctx.scale(-1, 1);
+        ctx.drawImage(video, 0, 0, canvas.width * -1, canvas.height);
+        ctx.restore();
+        return canvas.toDataURL('image/jpeg', 0.8).split(',')[1];
+    }
+
+    // --- Location and Weather Functions ---
+    function updateLocationUI() {
+        elements.currentLocation.textContent = state.location.city;
+        elements.currentTemperature.textContent = state.location.weather;
+    }
+
+    async function fetchWeather(lat, lon) {
+        const prompt = `Based on the coordinates latitude ${lat} and longitude ${lon}, provide a very short, single-sentence summary of the current weather, including the city name, temperature in Celsius (e.g., 22°C), and main conditions (e.g., 'partly cloudy'). Do not include any greeting or conversational filler.`;
+        
+        try {
+            const weatherReport = await generateContent(prompt, null, 2); 
+            
+            const cityMatch = weatherReport.match(/in\s+([A-Z][a-z\s]+),/);
+            const tempMatch = weatherReport.match(/(\d+°C)/);
+            const city = cityMatch ? cityMatch[1].trim() : state.location.city;
+            const temp = tempMatch ? tempMatch[1] : '-- °C';
+            state.location.city = city;
+            state.location.weather = temp;
+        } catch (error) {
+            console.error('Failed to get weather from Gemini:', error);
+            state.location.weather = 'N/A';
+        }
+        updateLocationUI();
+    }
+
+    function getLocation() {
+        if (navigator.geolocation) {
+            navigator.geolocation.getCurrentPosition(
+                (position) => {
+                    const lat = position.coords.latitude;
+                    const lon = position.coords.longitude;
+                    state.location.lat = lat;
+                    state.location.lon = lon;
+                    fetchWeather(lat, lon);
+                },
+                (error) => {
+                    console.error('Geolocation Error:', error.message);
+                    state.location.city = 'Location Disabled';
+                    updateLocationUI();
+                }
+            );
+        } else {
+            state.location.city = 'Geolocation Not Supported';
+            updateLocationUI();
+        }
+    }
+
+    // --- Speech Synthesis (TTS) Functions using Gemini TTS API ---
+
+    function stopSpeaking() {
+        if (state.audioPlayer) {
+            state.audioPlayer.pause();
+            state.audioPlayer.currentTime = 0;
+        }
+        // Note: Do NOT set state.isSpeaking = false here, as it's needed to prevent startRecognition() in onend from running
+        // It must be set to false in onended or onerror.
+    }
+
+    // Added skipGreeting flag for the Inactivity Prompt
+    async function speakResponse(text, skipGreeting = false) {
+        // --- STEP 1: Stop any currently running speech and set status ---
+        // Stop any currently playing audio but do not reset state.isSpeaking yet
+        stopSpeaking(); 
+        
+        // Set status to Speaking. This triggers BGM volume reduction via updateStatus.
+        state.isSpeaking = true;
+        updateStatus({ text: 'Speaking...', class: 'bg-yellow-500' }); 
+        
+        // Immediately stop the inactivity timer when speech begins
+        resetInactivityTimer();
+
+        // --- STEP 2: Clean text for correct pronunciation ---
+        const cleanedText = cleanTextForTTS(text);
+
+        const VOICE_NAME = "Leda"; 
+        const payload = {
+            contents: [{
+                parts: [{ text: cleanedText }]
+            }],
+            generationConfig: {
+                responseModalities: ["AUDIO"],
+                speechConfig: {
+                    voiceConfig: {
+                        prebuiltVoiceConfig: { voiceName: VOICE_NAME }
+                    }
+                }
+            },
+            model: "gemini-2.5-flash-preview-tts"
+        };
+
+        let audioUrl = null;
+        let retries = 3;
+        
+        for (let i = 0; i < retries; i++) {
+            try {
+                const response = await fetch(TTS_API_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                if (!response.ok) {
+                    throw new Error(`TTS HTTP error! status: ${response.status}`);
+                }
+
+                const result = await response.json();
+                const part = result?.candidates?.[0]?.content?.parts?.[0];
+                const audioData = part?.inlineData?.data;
+                const mimeType = part?.inlineData?.mimeType;
+
+                if (audioData && mimeType && mimeType.startsWith("audio/L16")) {
+                    const rateMatch = mimeType.match(/rate=(\d+)/);
+                    const sampleRate = rateMatch ? parseInt(rateMatch[1], 10) : 16000;
+                    
+                    const pcmData = base64ToArrayBuffer(audioData);
+                    const pcm16 = new Int16Array(pcmData);
+                    const wavBlob = pcmToWav(pcm16, sampleRate);
+                    audioUrl = URL.createObjectURL(wavBlob);
+                    break; 
+
+                } else {
+                    throw new Error("Invalid TTS response structure or mime type.");
+                }
+
+            } catch (error) {
+                console.error(`TTS Attempt ${i + 1} failed:`, error);
+                if (i === retries - 1) {
+                    console.warn("Falling back to native browser TTS.");
+                    const nativeUtterance = new SpeechSynthesisUtterance(text);
+                    nativeUtterance.lang = state.currentLang;
+                    
+                    // --- CRITICAL FIX: Add onend handler for native TTS fallback ---
+                    nativeUtterance.onend = () => {
+                         state.isSpeaking = false;
+                         // Only restart recognition if we are in voice mode and enabled
+                        if (state.currentMode === 'voice' && state.isEnabled) {
+                            startRecognition(); 
+                        } else {
+                            updateStatus({ text: 'Ready', class: 'bg-green-500' });
+                        }
+                        // IMPORTANT: Restart the inactivity timer after speaking finishes
+                        resetInactivityTimer();
+                    }
+
+                    speechSynthesis.speak(nativeUtterance);
+                    return; // Exit here, preventing audio player logic
+                }
+                const delay = Math.pow(2, i) * 1000 + Math.random() * 1000;
+                await new Promise(resolve => setTimeout(resolve, delay));
+            }
+        }
+        
+        if (audioUrl) {
+            state.audioPlayer.src = audioUrl;
+            state.audioPlayer.play();
+
+            state.audioPlayer.onended = () => {
+                state.isSpeaking = false;
+                URL.revokeObjectURL(audioUrl);
+                
+                // Only restart recognition if we are in voice mode and enabled
+                if (state.currentMode === 'voice' && state.isEnabled) {
+                    startRecognition(); 
+                } else {
+                    updateStatus({ text: 'Ready', class: 'bg-green-500' });
+                }
+                // IMPORTANT: Restart the inactivity timer after speaking finishes
+                resetInactivityTimer();
+            };
+
+            state.audioPlayer.onerror = (event) => {
+                console.error('Audio Playback Error:', event);
+                state.isSpeaking = false;
+                // Only restart recognition if we are in voice mode and enabled
+                if (state.currentMode === 'voice' && state.isEnabled) {
+                    startRecognition();
+                }
+                resetInactivityTimer();
+            };
+        }
+    }
+
+
+    // --- Speech Recognition Functions ---
+    function stopListening() {
+        if (recognition && state.isListening) {
+             try { recognition.abort(); } catch(e) { /* Already stopped/aborted */ }
+             state.isListening = false;
+        }
+    }
+
+    function setupRecognition() {
+        if (!('webkitSpeechRecognition' in window)) {
+            updateStatus({ text: 'Browser not supported', class: 'bg-red-500' });
+            elements.powerToggle.disabled = true;
+            return null;
+        }
+        const SpeechRecognition = window.webkitSpeechRecognition;
+        recognition = new SpeechRecognition();
+        recognition.continuous = false;
+        recognition.interimResults = false;
+        recognition.maxAlternatives = 1;
+
+        recognition.onstart = () => {
+            state.isListening = true;
+            stopSpeaking();
+            updateStatus({ text: 'Listening...', class: 'bg-blue-500' });
+            // Recognition start is a state change, but we rely on result/end to reset the inactivity timer.
+        };
+        recognition.onresult = (event) => {
+            const transcript = event.results[0][0].transcript;
+            
+            // --- FIX: Play notification sound when query is successfully received ---
+            state.notificationPlayer.currentTime = 0;
+            state.notificationPlayer.play().catch(e => console.warn("Voice Result: Notification sound failed:", e));
+
+            appendMessage('user', transcript);
+            processQuery(transcript);
+        };
+        recognition.onerror = (event) => {
+            if (event.error !== 'no-speech' && event.error !== 'aborted') {
+                console.error('Speech Recognition Error:', event.error);
+            }
+            state.isListening = false;
+        };
+        recognition.onend = () => {
+            state.isListening = false;
+            // Only restart recognition if enabled and not currently speaking
+            if (state.currentMode === 'voice' && state.isEnabled && !state.isSpeaking) {
+                 if (elements.statusText.textContent !== 'Thinking...') {
+                     startRecognition(); 
+                 }
+            } else if (!state.isSpeaking) {
+                 // Return to ready/idle state if not speaking
+                 updateStatus({ text: state.isEnabled ? 'Ready' : 'Assistant Idle', class: state.isEnabled ? 'bg-green-500' : 'bg-gray-400' });
+            }
+        };
+    }
+
+    function startRecognition() {
+        if (!state.isEnabled || state.isListening || state.isSpeaking || state.currentMode !== 'voice') return;
+        try {
+            recognition.lang = state.currentLang;
+            recognition.start();
+        } catch (e) {
+            console.warn('Recognition failed to start (likely already running):', e);
+            state.isListening = false;
+        }
+    }
+
+    // --- Gemini API Functions ---
+    async function generateContent(prompt, base64Image = null, retries = 3) {
+        if (state.currentMode === 'voice') {
+            // Set status to Thinking, which triggers BGM volume reduction
+            updateStatus({ text: 'Thinking...', class: 'bg-purple-500' });
+        }
+        
+        // --- UPDATED SYSTEM INSTRUCTION WITH ANDA RWANDA TEAM INFO ---
+        const contextPrompt = `You are "ANDA GOGUIDE Ai", the smart AI guide built into the "ANDA GOGUIDE" wearable glasses, developed by the ANDA RWANDA Company.
+PRIMARY FUNCTION: To interpret the user’s immediate surroundings via the microphone and camera to provide rich, context-aware audio narration and answer on-the-spot questions.
+TONE: Be warm, knowledgeable, friendly, and encouraging. Always act as a supportive friend and guide.
+CONVERSATIONAL MANDATE: **Your responses must be extremely concise, conversational (2-3 sentences MAX), and optimized for fast voice delivery.** Do not include any filler or unnecessary details.
+NEVER NEGATIVE: Never say "I cannot," "I don't know," "I failed," or any negative phrase. If you are unsure, offer a helpful alternative or a positive rephrase (e.g., "I'm still learning that, but I can tell you about X!").
+VISUAL CONTEXT RULE: When referencing visual information (from the camera), do not say "in the picture" or "in the image." Use phrases like "as you can see..." or "this is actually...".
+CULTURAL MANDATE: Information must be focused on Rwanda's history, culture, or tourism/nature.
+ANDA RWANDA TEAM KNOWLEDGE: ANDA RWANDA Company aims to improve tourism in Rwanda by making travel easier.
+The core team members are:
+- Niyonsuti Sager, C.O.O: Experienced in project and operations management.
+- Iringira Steven, C.E.O: A skilled leader with a background in business planning and growth.
+- GANZA MUTABAZI Oneil: Ai trainer.
+- Teta Kelia, Events Coordinator: Organizes events to showcase the device and connect with partners.
+- Byishimo Frank, Partnership Strategist: An expert in building partnerships within the tourism industry.
+- Muhimpundu Betty, Brand Ambassador: Represents the brand and helps share our vision.
+- Cyusa Derrick, Senior Advisor: A strategic planner for business development.
+- Gitesi Honorine, Accountant: Manages the company's finances.
+- Shami Blaise, Project Manager: An AI expert who ensures the product is built on time and meets technical goals.
+- Adam Nadia, Secretary: Manages schedules and records.
+- Niyonkuru Sioni, HR Manager: Oversees hiring, training, and team development.
+Iringira Steven is the C.E.O.
+OPERATIONAL MANDATE: You must operate efficiently and provide information that is accurate and specifically tailored to Rwandan topics, **without relying on external internet searches**.
+The user is currently in ${state.location.city} where the weather is ${state.location.weather}. Use this environmental context only when relevant.`;
+
+        const parts = [{ text: prompt }];
+        if (base64Image) {
+            parts.unshift({
+                inlineData: {
+                    mimeType: "image/jpeg",
+                    data: base64Image
+                }
+            });
+        }
+
+        const payload = {
+            contents: [{ parts: parts }],
+            systemInstruction: {
+                parts: [{ text: contextPrompt }]
+            }
+        };
+
+        for (let i = 0; i < retries; i++) {
+            try {
+                const response = await fetch(API_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                const result = await response.json();
+                const text = result.candidates?.[0]?.content?.parts?.[0]?.text;
+                
+                if (text) {
+                    return text;
+                } else {
+                    // Friendly failure message
+                    return "It seems I'm still processing that request. Could you ask me something else about your view?";
+                }
+            } catch (error) {
+                console.error(`Attempt ${i + 1} failed:`, error);
+                
+                if (i === retries - 1) {
+                    // Friendly, non-negative error handling
+                    return "Just a quick technical glitch! Let's try that one more time. What was your question?";
+                }
+                const delay = Math.pow(2, 2) * 1000 + Math.random() * 1000;
+                await new Promise(resolve => setTimeout(resolve, delay));
+            } finally {
+                 // After trying, force update status which handles music volume
+                 if (state.currentMode === 'voice' && !state.isSpeaking) {
+                    // If we were thinking and didn't start speaking, return to ready/listening
+                    const statusText = state.isEnabled ? 'Ready' : 'Assistant Idle';
+                    const statusClass = state.isEnabled ? 'bg-green-500' : 'bg-gray-400';
+                    updateStatus({ text: statusText, class: statusClass });
+                 }
+            }
+        }
+    }
+
+    // --- Core Query Processing ---
+    async function processQuery(query) {
+        
+        // --- Keep reset timer here as it should fire after query logic starts ---
+        resetInactivityTimer();
+        
+        stopListening();
+
+        const identityKeywords = ['who are you', 'who made you', 'who developed you', 'your name', 'anda rwanda', 'team'];
+        const lowerQuery = query.toLowerCase();
+        const isIdentityQuery = identityKeywords.some(keyword => lowerQuery.includes(keyword));
+        
+        const greeting = getKinyarwandaGreeting();
+
+        if (isIdentityQuery) {
+            const identityResponse = `${greeting}I am **ANDA GO GUIDE A I**, the smart AI guide built into the "ANDA GOGUIDE" wearable glasses, developed by the **ANDA RWANDA Company** to help you explore the history and culture around you! Our CEO is Iringira Steven, and the whole team is dedicated to making your travel easier.`;
+            appendMessage('goguide', identityResponse);
+            speakResponse(identityResponse);
+            return;
+        }
+
+        let base64Image = null;
+        if (state.isVisualAiEnabled) {
+            base64Image = captureFrameToB64();
+            if (base64Image) {
+                query = `Using the current live visual context, answer the user's query: "${query}"`;
+            } else {
+                 // Friendly message if camera fails, but still process text query
+                const cameraError = "Muraho! I couldn't get a clear image just now, but I can definitely process your text question!";
+                appendMessage('goguide', cameraError);
+                speakResponse(cameraError);
+                // Continue with just the text query
+            }
+        }
+
+        try {
+            const responseText = await generateContent(query, base64Image);
+            
+            const finalResponse = greeting + responseText;
+            
+            appendMessage('goguide', finalResponse);
+            speakResponse(finalResponse);
+        } catch (error) {
+            console.error('Gemini Processing Error:', error);
+            // Friendly, non-negative error handling
+            const errorMessage = `${greeting}I had a quick glitch connecting, but let's keep going! Could you please repeat your question?`;
+            appendMessage('goguide', errorMessage);
+            speakResponse(errorMessage);
+        }
+    }
+    
+    // --- Text Breakdown Modal Functions ---
+    async function handleBreakdown(text, lang) {
+        elements.modalResult.classList.add('hidden');
+        elements.modalLoading.classList.remove('hidden');
+        elements.modalResult.classList.remove('bg-red-800', 'text-red-100');
+        elements.modalResult.classList.add('bg-green-900', 'text-green-200');
+        
+        let prompt;
+        if (lang === 'summary') {
+            prompt = `Provide a concise, 1-2 sentence summary of the following text: "${text}"`;
+        } else {
+            prompt = `Translate the following text into ${lang} and format the output clearly: "${text}"`;
+        }
+        
+        try {
+            const responseText = await generateContent(prompt, null, 3); 
+            
+            const greeting = getKinyarwandaGreeting();
+            const finalUiText = `<span class="font-bold">${lang === 'summary' ? 'Summary' : lang.toUpperCase()}:</span> ${responseText}`;
+            
+            elements.modalResult.innerHTML = finalUiText;
+            
+            // Note: BGM will remain at low volume during TTS, as handled by adjustMusicVolumeAndPlayback
+            speakResponse(greeting + responseText);
+
+        } catch (error) {
+            elements.modalResult.textContent = `Error: Failed to process the request, but you can still close the window!`;
+            elements.modalResult.classList.remove('bg-green-900', 'text-green-200');
+            elements.modalResult.classList.add('bg-red-800', 'text-red-100');
+        } finally {
+            elements.modalLoading.classList.add('hidden');
+            elements.modalResult.classList.remove('hidden');
+        }
+    }
+
+    function showBreakdownModal(text) {
+        elements.modalScannedText.textContent = text;
+        elements.breakdownModal.classList.remove('hidden');
+        elements.modalResult.classList.add('hidden');
+        elements.modalLoading.classList.add('hidden');
+        
+        // Re-attach listeners to ensure they don't fire multiple times
+        document.querySelectorAll('.breakdown-lang-btn').forEach(btn => {
+            // Clone and replace to safely remove old listeners
+            const newBtn = btn.cloneNode(true);
+            btn.replaceWith(newBtn);
+            newBtn.addEventListener('click', () => handleBreakdown(text, newBtn.getAttribute('data-lang-code')));
+        });
+    }
+
+    function hideBreakdownModal() {
+        elements.breakdownModal.classList.add('hidden');
+        stopSpeaking();
+        // Reset timer if we close the modal and we are in voice mode
+        resetInactivityTimer();
+    }
+
+    // --- Mode Management and Handlers ---
+    function setMode(mode) {
+        if (state.currentMode === mode) return;
+        state.currentMode = mode;
+        [elements.tabVoice, elements.tabQr].forEach(tab => tab.classList.remove('tab-active', 'text-gray-400'));
+        
+        elements.modeVoice.classList.add('hidden');
+        elements.modeQr.classList.add('hidden');
+        
+        stopSpeaking();
+        stopListening();
+        stopQrScanner();
+        stopVisualCamera(); 
+        hideBreakdownModal();
+        elements.powerToggle.checked = false;
+        elements.visualAiToggle.checked = false;
+        state.isEnabled = false;
+        state.isVisualAiEnabled = false;
+        
+        // Stop timer when mode changes away from voice/guide
+        resetInactivityTimer(); 
+
+        if (mode === 'voice') {
+            elements.tabVoice.classList.add('tab-active');
+            elements.modeVoice.classList.remove('hidden');
+            updateStatus({ text: 'Assistant Idle', class: 'bg-gray-400' });
+        } else if (mode === 'qr') {
+            elements.tabQr.classList.add('tab-active');
+            elements.modeQr.classList.remove('hidden');
+            updateStatus({ text: 'QR Mode Active', class: 'bg-indigo-500' });
+            startQrScanner();
+        }
+    }
+    
+    // Voice Mode Toggles
+    function handleToggle() {
+        state.isEnabled = elements.powerToggle.checked;
+        if (state.isEnabled) {
+            updateStatus({ text: 'Ready', class: 'bg-green-500' });
+            startRecognition();
+            // Start the inactivity timer when enabled
+            resetInactivityTimer();
+        } else {
+            stopSpeaking();
+            stopListening();
+            // Stop the inactivity timer when disabled
+            resetInactivityTimer();
+            // Music state is handled by updateStatus which is triggered here
+            updateStatus({ text: 'Assistant Idle', class: 'bg-gray-400' });
+        }
+    }
+
+    function handleVisualAiToggle() {
+        state.isVisualAiEnabled = elements.visualAiToggle.checked;
+        if (state.isVisualAiEnabled) {
+            startVisualCamera();
+        } else {
+            stopVisualCamera();
+        }
+    }
+    
+    // Background Music Toggle Handler
+    function handleBackgroundMusicToggle() {
+        state.isMusicEnabled = elements.backgroundMusicToggle.checked;
+        if (state.isMusicEnabled) {
+            // Start music and adjust volume based on current status
+            adjustMusicVolumeAndPlayback(elements.statusText.textContent);
+        } else {
+            stopBackgroundMusic();
+        }
+    }
+
+    function handleLanguageChange() {
+        state.currentLang = elements.languageSelect.value;
+        localStorage.setItem('goguide_language', state.currentLang);
+        
+        if (state.isListening) {
+            stopListening();
+            if (state.isEnabled) startRecognition();
+        }
+    }
+
+    function handleManualSend() {
+        const query = elements.manualInput.value.trim();
+        if (query && state.isEnabled) {
+            
+            // --- FIX: Play notification sound immediately upon manual send ---
+            state.notificationPlayer.currentTime = 0;
+            state.notificationPlayer.play().catch(e => console.warn("Manual Send: Notification sound failed:", e));
+
+            appendMessage('user', query);
+            elements.manualInput.value = '';
+            processQuery(query);
+        }
+    }
+
+    // QR Scanner Functions
+    function onScanSuccess(decodedText, decodedResult) {
+        stopQrScanner();
+        const isUrl = /^(https?:\/\/)?([\w\d.-]+)\.([\w]{2,})(\S*)$/i.test(decodedText.trim());
+        elements.qrResultBox.classList.remove('hidden');
+        
+        // --- NEW: Play notification sound when QR is successfully scanned ---
+        state.notificationPlayer.currentTime = 0;
+        state.notificationPlayer.play().catch(e => console.warn("Notification sound failed:", e));
+
+        if (isUrl) {
+            const targetUrl = decodedText.startsWith('http') ? decodedText : `https://${decodedText}`;
+            elements.qrResultBox.className = 'p-4 bg-yellow-800 border border-yellow-600 text-yellow-100 rounded-xl transition duration-300 shadow-md';
+            
+            // --- UPDATED: Immediate redirection and updated text ---
+            elements.qrResultText.textContent = `Link detected. Redirecting to: ${targetUrl} now...`;
+            window.location.href = targetUrl;
+            // --- END UPDATED ---
+
+        } else {
+            elements.qrResultBox.className = 'p-4 bg-green-900 border border-green-700 text-green-200 rounded-xl transition duration-300 shadow-md';
+            elements.qrResultText.textContent = `Text detected. Reading aloud and providing breakdown options.`;
+            
+            const ttsText = `${getKinyarwandaGreeting()}QR code contains text: ${decodedText}`; 
+            speakResponse(ttsText);
+            
+            showBreakdownModal(decodedText);
+        }
+    }
+
+    async function startQrScanner() {
+        if (state.isQrScanning) return;
+        elements.qrToggleBtn.textContent = 'Stopping...';
+        elements.qrToggleBtn.disabled = true;
+        elements.qrResultBox.classList.add('hidden');
+        elements.qrReaderDiv.innerHTML = '<p class="text-gray-500 text-center p-4 qr-placeholder">Camera starting...</p>';
+        try {
+            if (!state.qrScanner) {
+                state.qrScanner = new Html5Qrcode("qr-reader");
+            }
+            await state.qrScanner.start(
+                { facingMode: "environment" },
+                { fps: 10, qrbox: { width: 250, height: 250 } },
+                onScanSuccess,
+                (error) => { /* console.warn(`QR Code Scan Error: ${error}`); */ }
+            );
+            state.isQrScanning = true;
+            elements.qrToggleBtn.textContent = 'Stop Scanner';
+            elements.qrReaderDiv.style.minHeight = '300px';
+        } catch (err) {
+            console.error('Failed to start QR Scanner:', err);
+            elements.qrReaderDiv.innerHTML = `<p class="text-red-400 text-center p-4 qr-placeholder">Camera Error: Could not access camera. Check permissions.</p>`;
+            elements.qrToggleBtn.textContent = 'Start Scanner';
+            state.isQrScanning = false;
+        } finally {
+            elements.qrToggleBtn.disabled = false;
+        }
+    }
+
+    async function stopQrScanner() {
+        if (!state.isQrScanning || !state.qrScanner) return;
+        
+        try {
+            await state.qrScanner.stop();
+            state.isQrScanning = false;
+            elements.qrToggleBtn.textContent = 'Start Scanner';
+            elements.qrReaderDiv.innerHTML = '<p class="text-gray-500 text-center p-4 qr-placeholder">Scanner stopped. Tap Start Scanner to resume.</p>';
+        } catch (err) {
+            console.warn('Error stopping QR scanner:', err);
+            state.isQrScanning = false;
+            elements.qrToggleBtn.textContent = 'Start Scanner';
+        }
+    }
+
+    // --- Initialization ---
+    function initialize() {
+        setupRecognition();
+        const storedLang = localStorage.getItem('goguide_language');
+        if (storedLang && elements.languageSelect.querySelector(`option[value="${storedLang}"]`)) {
+            state.currentLang = storedLang;
+            elements.languageSelect.value = storedLang;
+        } else {
+            state.currentLang = elements.languageSelect.value;
+        }
+        getLocation();
+        
+        elements.powerToggle.addEventListener('change', handleToggle);
+        elements.visualAiToggle.addEventListener('change', handleVisualAiToggle);
+        elements.backgroundMusicToggle.addEventListener('change', handleBackgroundMusicToggle);
+        elements.languageSelect.addEventListener('change', handleLanguageChange);
+        elements.manualSendBtn.addEventListener('click', handleManualSend);
+        elements.manualInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') handleManualSend();
+        });
+        
+        elements.tabVoice.addEventListener('click', () => setMode('voice'));
+        elements.tabQr.addEventListener('click', () => setMode('qr'));
+        
+        elements.qrToggleBtn.addEventListener('click', () => {
+             if (state.isQrScanning) {
+                 stopQrScanner();
+             } else {
+                 startQrScanner();
+             }
+        });
+        elements.modalCloseBtn.addEventListener('click', hideBreakdownModal);
+        
+        // Ensure background music volume is low and preload the audio
+        state.backgroundMusicPlayer.volume = 0.4;
+        state.backgroundMusicPlayer.load();
+        
+        // Preload notification sound
+        state.notificationPlayer.load();
+
+        setMode('voice'); 
+        
+        // Start the inactivity timer immediately after setting the initial state (disabled).
+        // It will only activate when state.isEnabled becomes true.
+        resetInactivityTimer();
+    }
+
+    window.onload = initialize;
+</script>
+</body>
+</html>
